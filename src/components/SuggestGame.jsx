@@ -1,134 +1,134 @@
-// components/SuggestGame.jsx
-// Suggestion form — sends via mailto to the owner's email
+// components/SuggestGame.jsx — centered modal using modal-backdrop
 
 import { useState } from 'react'
 import './SuggestGame.css'
 
-const OWNER_EMAIL = import.meta.env.VITE_CONTACT_EMAIL || 'your-email@gmail.com'
-
-const CATEGORIES = [
-  'New Game Idea',
-  'Bug Report',
-  'Design Improvement',
-  'Feature Request',
-  'Other',
-]
+const FORMSPREE_ID = import.meta.env.VITE_FORMSPREE_ID || 'YOUR_FORM_ID'
 
 export default function SuggestGame({ onClose }) {
-  const [name,     setName]     = useState('')
-  const [category, setCategory] = useState(CATEGORIES[0])
-  const [message,  setMessage]  = useState('')
-  const [sent,     setSent]     = useState(false)
+  const [form,   setForm]   = useState({ name:'', idea:'', contact:'' })
+  const [status, setStatus] = useState('idle')
 
-  function handleSend() {
-    if (!message.trim()) return
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!form.idea.trim()) return
+    setStatus('sending')
+    try {
+      const res = await fetch(`https://formspree.io/f/${FORMSPREE_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'Accept':'application/json' },
+        body: JSON.stringify({
+          name:     form.name    || 'Anonymous',
+          idea:     form.idea,
+          contact:  form.contact || 'none',
+          _subject: `[Bet You Can't] New Game Suggestion`,
+        }),
+      })
+      setStatus(res.ok ? 'sent' : 'error')
+    } catch {
+      setStatus('error')
+    }
+  }
 
-    const subject = encodeURIComponent(`[Bet You Can't] ${category} — from ${name || 'Anonymous'}`)
-    const body    = encodeURIComponent(
-      `Name: ${name || 'Anonymous'}\nCategory: ${category}\n\n${message}\n\n---\nSent from Bet You Can't`
-    )
-    window.open(`mailto:${OWNER_EMAIL}?subject=${subject}&body=${body}`, '_blank')
-    setSent(true)
+  // Close on backdrop click
+  function handleBackdrop(e) {
+    if (e.target === e.currentTarget) onClose()
   }
 
   return (
-    <div className="suggest-modal">
-      <div className="suggest-modal__header">
-        <div className="suggest-modal__title-row">
-          <i className="bx bx-bulb suggest-modal__icon" />
-          <h2 className="suggest-modal__title">Suggest a Game or Idea</h2>
-        </div>
-        <button className="btn btn-ghost suggest-modal__close" onClick={onClose}>
-          <i className="bx bx-x" />
-        </button>
-      </div>
+    <div className="modal-backdrop" onClick={handleBackdrop}>
+      <div className="modal-box suggest-box animate-fade">
 
-      {!sent ? (
-        <>
-          <p className="suggest-modal__subtitle">
-            Got a game idea or feedback? Send it directly — it might end up in the next update!
-          </p>
-
-          <div className="suggest-form">
-            <div className="suggest-field">
-              <label className="suggest-label">
-                <i className="bx bx-user" /> Your Name <span className="suggest-opt">(optional)</span>
-              </label>
-              <input
-                className="input"
-                placeholder="e.g. Tsarles"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                maxLength={40}
-              />
-            </div>
-
-            <div className="suggest-field">
-              <label className="suggest-label">
-                <i className="bx bx-category" /> Category
-              </label>
-              <div className="suggest-cats">
-                {CATEGORIES.map(cat => (
-                  <button
-                    key={cat}
-                    className={`suggest-cat-btn ${category === cat ? 'suggest-cat-btn--active' : ''}`}
-                    onClick={() => setCategory(cat)}
-                    type="button"
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="suggest-field">
-              <label className="suggest-label">
-                <i className="bx bx-message-rounded-edit" /> Your Idea / Message
-              </label>
-              <textarea
-                className="input"
-                placeholder={
-                  category === 'New Game Idea'
-                    ? 'Describe the game concept, rules, and any fun twists...'
-                    : category === 'Bug Report'
-                    ? 'What happened? What were you doing when it broke?'
-                    : 'Tell us what you think...'
-                }
-                value={message}
-                onChange={e => setMessage(e.target.value)}
-                rows={5}
-              />
-            </div>
-
-            <div className="suggest-footer">
-              <p className="suggest-note">
-                <i className="bx bx-info-circle" />
-                This opens your mail app with everything pre-filled.
-              </p>
-              <button
-                className="btn btn-primary suggest-send-btn"
-                onClick={handleSend}
-                disabled={!message.trim()}
-              >
-                <i className="bx bx-send" /> Send Suggestion
-              </button>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="suggest-success">
-          <i className="bx bx-check-circle suggest-success__icon" />
-          <h3 className="suggest-success__title">Thanks for the suggestion!</h3>
-          <p className="suggest-success__text">
-            Your mail app should have opened with the message ready to send.
-            If not, check your popup blocker or email directly at{' '}
-            <strong>{OWNER_EMAIL}</strong>.
-          </p>
-          <button className="btn btn-secondary" onClick={onClose}>
-            <i className="bx bx-arrow-back" /> Close
+        <div className="modal-box__header">
+          <h2 className="modal-box__title">
+            <i className="bx bx-bulb" /> Suggest a Game
+          </h2>
+          <button className="modal-box__close btn btn-ghost" onClick={onClose}>
+            <i className="bx bx-x" />
           </button>
         </div>
-      )}
+
+        <div className="modal-box__body">
+          {status === 'sent' ? (
+            <div className="suggest-success">
+              <i className="bx bx-check-circle suggest-success-icon" />
+              <h3>Suggestion sent!</h3>
+              <p>Thanks for the idea — we'll look into it!</p>
+              <button className="btn btn-secondary" onClick={onClose}>Close</button>
+            </div>
+          ) : (
+            <form className="suggest-form" onSubmit={handleSubmit}>
+              <p className="suggest-intro">
+                Got a wild game concept, chaos twist, or dare mechanic in mind?
+                Drop it here — it might become the next game on Bet You Can't!
+              </p>
+
+              <div className="suggest-field">
+                <label className="suggest-label">
+                  <i className="bx bx-user" /> Your name <span>(optional)</span>
+                </label>
+                <input
+                  className="input"
+                  placeholder="e.g. Tsarles"
+                  value={form.name}
+                  onChange={e => setForm(f=>({...f,name:e.target.value}))}
+                  maxLength={40}
+                />
+              </div>
+
+              <div className="suggest-field">
+                <label className="suggest-label">
+                  <i className="bx bx-game" /> Your game idea <span className="suggest-required">*</span>
+                </label>
+                <textarea
+                  className="input"
+                  placeholder="Describe your game — rules, the twist, what makes it fun..."
+                  value={form.idea}
+                  onChange={e => setForm(f=>({...f,idea:e.target.value}))}
+                  rows={5}
+                  required
+                />
+              </div>
+
+              <div className="suggest-field">
+                <label className="suggest-label">
+                  <i className="bx bx-envelope" /> Contact <span>(optional)</span>
+                </label>
+                <input
+                  className="input"
+                  placeholder="Email or socials so we can credit you"
+                  value={form.contact}
+                  onChange={e => setForm(f=>({...f,contact:e.target.value}))}
+                  maxLength={80}
+                />
+              </div>
+
+              {status === 'error' && (
+                <p className="suggest-error">
+                  <i className="bx bx-error-circle" /> Something went wrong. Try again!
+                </p>
+              )}
+
+              <button
+                className="btn btn-primary suggest-submit"
+                type="submit"
+                disabled={status==='sending' || !form.idea.trim()}
+              >
+                {status==='sending'
+                  ? <><i className="bx bx-loader-alt bx-spin" /> Sending...</>
+                  : <><i className="bx bx-send" /> Send Suggestion</>
+                }
+              </button>
+
+              <p className="suggest-note">
+                Built by{' '}
+                <a href="https://github.com/Tsarles" target="_blank" rel="noopener noreferrer">@Tsarles</a>
+                {' '}— your idea could be the next game!
+              </p>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
