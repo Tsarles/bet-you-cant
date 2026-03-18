@@ -1,4 +1,4 @@
-// pages/Home.jsx — with player name + color setup
+// pages/Home.jsx — async Firebase session creation
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -14,43 +14,69 @@ export default function Home() {
   const [joinCode, setJoinCode]         = useState('')
   const [joinError, setJoinError]       = useState('')
   const [tab, setTab]                   = useState('start')
+  const [starting, setStarting]         = useState(false)
+  const [joining,  setJoining]          = useState(false)
 
   const [hostPlayer, setHostPlayer]   = useState({ name: '', color: PLAYER_COLORS[0].value })
   const [guestPlayer, setGuestPlayer] = useState({ name: '', color: PLAYER_COLORS[1].value })
 
-  function handleStart() {
-    if (!selectedGame) return
-    const code = generateCode()
-    saveSession(code, {
-      code,
-      gameId: selectedGame.id,
-      gameState: selectedGame.createInitialState(),
-      dare: '',
-      dareType: 'none',
-      winTarget: 3,
-      player2Joined: false,
-      started: false,
-      players: {
-        X: { name: hostPlayer.name || 'Player 1', color: hostPlayer.color },
-        O: { name: 'Player 2', color: PLAYER_COLORS[1].value },
-      },
-      scores: { X: 0, O: 0 },
-    })
-    navigate(`/lobby/${code}?role=host`)
+  // ── Host: create session in Firebase ────────────────────────
+  async function handleStart() {
+    if (!selectedGame || starting) return
+    setStarting(true)
+    try {
+      const code = generateCode()
+      await saveSession(code, {
+        code,
+        gameId: selectedGame.id,
+        gameState: selectedGame.createInitialState(),
+        dare: '',
+        dareType: 'none',
+        winTarget: 3,
+        player2Joined: false,
+        started: false,
+        players: {
+          X: { name: hostPlayer.name.trim() || 'Player 1', color: hostPlayer.color },
+          O: { name: 'Player 2', color: PLAYER_COLORS[1].value },
+        },
+        scores: { X: 0, O: 0 },
+      })
+      navigate(`/lobby/${code}?role=host`)
+    } catch (err) {
+      console.error('Failed to create session:', err)
+      alert('Could not create game session. Check your internet connection.')
+    } finally {
+      setStarting(false)
+    }
   }
 
-  function handleJoin() {
+  // ── Guest: verify code exists then navigate ──────────────────
+  async function handleJoin() {
     const code = joinCode.trim().toUpperCase()
     if (!code) { setJoinError('Enter a code!'); return }
-    const session = loadSession(code)
-    if (!session) { setJoinError("Code not found — double check it!"); return }
-    setJoinError('')
-    // Store guest info before navigating
-    sessionStorage.setItem('guestInfo', JSON.stringify({
-      name: guestPlayer.name || 'Player 2',
-      color: guestPlayer.color,
-    }))
-    navigate(`/lobby/${code}?role=guest`)
+    if (joining) return
+    setJoining(true)
+    try {
+      const session = await loadSession(code)
+      if (!session) {
+        setJoinError("That code doesn't exist — double check it!")
+        return
+      }
+      if (session.started) {
+        setJoinError('That game already started!')
+        return
+      }
+      // Save guest info to sessionStorage so the lobby can read it
+      sessionStorage.setItem('guestInfo', JSON.stringify({
+        name:  guestPlayer.name.trim() || 'Player 2',
+        color: guestPlayer.color,
+      }))
+      navigate(`/lobby/${code}?role=guest`)
+    } catch (err) {
+      setJoinError('Could not connect. Check your internet.')
+    } finally {
+      setJoining(false)
+    }
   }
 
   return (
@@ -75,10 +101,16 @@ export default function Home() {
       <main className="home__main">
         {/* Left: game list */}
         <section className="home__games-card animate-up delay-2">
-          <span className="section-label"><i className="bx bx-joystick" style={{marginRight:5}} />Pick a Game</span>
+          <span className="section-label">
+            <i className="bx bx-joystick" style={{marginRight:5}} />Pick a Game
+          </span>
           <div className="home__game-list">
             {GAMES.map(game => (
-              <GameCard key={game.id} game={game} selected={selectedGame?.id === game.id} onSelect={setSelectedGame} />
+              <GameCard
+                key={game.id} game={game}
+                selected={selectedGame?.id === game.id}
+                onSelect={setSelectedGame}
+              />
             ))}
             <div className="home__game-placeholder">
               <i className="bx bx-plus-circle placeholder-icon" />
@@ -99,17 +131,27 @@ export default function Home() {
         {/* Right: action panel */}
         <aside className="home__panel animate-up delay-3">
           <div className="panel-tabs">
-            <button className={`panel-tab ${tab==='start'?'panel-tab--active':''}`} onClick={()=>setTab('start')}>
+            <button
+              className={`panel-tab ${tab==='start'?'panel-tab--active':''}`}
+              onClick={() => setTab('start')}
+            >
               <i className="bx bx-rocket" /> Start
             </button>
-            <button className={`panel-tab ${tab==='join'?'panel-tab--active':''}`} onClick={()=>setTab('join')}>
+            <button
+              className={`panel-tab ${tab==='join'?'panel-tab--active':''}`}
+              onClick={() => setTab('join')}
+            >
               <i className="bx bx-link" /> Join
             </button>
           </div>
 
           {tab === 'start' && (
             <div className="panel-body animate-fade">
-              <PlayerSetup value={hostPlayer} onChange={setHostPlayer} label="Your Name (Player 1)" />
+              <PlayerSetup
+                value={hostPlayer}
+                onChange={setHostPlayer}
+                label="Your Name (Player 1)"
+              />
               {selectedGame ? (
                 <div className="panel-selected-game">
                   <i className={`bx ${selectedGame.bxIcon}`} />
@@ -118,8 +160,15 @@ export default function Home() {
               ) : (
                 <p className="panel-no-game">← pick a game first</p>
               )}
-              <button className="btn btn-primary panel-cta" onClick={handleStart} disabled={!selectedGame}>
-                <i className="bx bx-code-alt" /> Generate Code
+              <button
+                className="btn btn-primary panel-cta"
+                onClick={handleStart}
+                disabled={!selectedGame || starting}
+              >
+                {starting
+                  ? <><i className="bx bx-loader-alt bx-spin" /> Creating...</>
+                  : <><i className="bx bx-code-alt" /> Generate Code</>
+                }
               </button>
             </div>
           )}
@@ -133,16 +182,35 @@ export default function Home() {
                     className="input panel-join-input"
                     placeholder="ABC-123"
                     value={joinCode}
-                    onChange={e => { setJoinCode(e.target.value.toUpperCase()); setJoinError('') }}
-                    onKeyDown={e => e.key==='Enter' && handleJoin()}
-                    maxLength={7} spellCheck={false}
+                    onChange={e => {
+                      setJoinCode(e.target.value.toUpperCase())
+                      setJoinError('')
+                    }}
+                    onKeyDown={e => e.key === 'Enter' && handleJoin()}
+                    maxLength={7}
+                    spellCheck={false}
                   />
                 </div>
-                {joinError && <p className="panel-error"><i className="bx bx-error-circle" /> {joinError}</p>}
+                {joinError && (
+                  <p className="panel-error">
+                    <i className="bx bx-error-circle" /> {joinError}
+                  </p>
+                )}
               </div>
-              <PlayerSetup value={guestPlayer} onChange={setGuestPlayer} label="Your Name (Player 2)" />
-              <button className="btn btn-secondary panel-cta" onClick={handleJoin}>
-                <i className="bx bx-log-in" /> Join Game
+              <PlayerSetup
+                value={guestPlayer}
+                onChange={setGuestPlayer}
+                label="Your Name (Player 2)"
+              />
+              <button
+                className="btn btn-secondary panel-cta"
+                onClick={handleJoin}
+                disabled={joining}
+              >
+                {joining
+                  ? <><i className="bx bx-loader-alt bx-spin" /> Joining...</>
+                  : <><i className="bx bx-log-in" /> Join Game</>
+                }
               </button>
             </div>
           )}

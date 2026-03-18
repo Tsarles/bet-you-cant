@@ -1,4 +1,4 @@
-// pages/GameRoom.jsx — with anti-leave guard after game ends
+// pages/GameRoom.jsx — async Firebase, anti-leave guard
 
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
@@ -6,7 +6,7 @@ import useGameSession from '../hooks/useGameSession'
 import { getGame } from '../games'
 import DareBet   from '../components/DareBet'
 import GameCode  from '../components/GameCode'
-import { updateScores, saveSession, loadSession } from '../utils/sessionStore'
+import { loadSession, saveSession, updateScores } from '../utils/sessionStore'
 import './GameRoom.css'
 
 export default function GameRoom() {
@@ -16,42 +16,28 @@ export default function GameRoom() {
   const lobbyRole        = params.get('role') || 'host'
   const playerRole       = lobbyRole === 'host' ? 'X' : 'O'
 
-  const { session, updateGameState } = useGameSession(code, playerRole)
+  const { session, loading, updateGameState } = useGameSession(code, playerRole)
 
-  // Anti-leave: warn before leaving mid-game
   const gameActiveRef = useRef(false)
   const [leavePrompt, setLeavePrompt] = useState(false)
   const [pendingNav,  setPendingNav]  = useState(null)
 
   useEffect(() => {
-    // Mark game as active if it's started and no series winner yet
-    if (session && !session.seriesWinner) {
-      gameActiveRef.current = true
-    }
-    if (session?.seriesWinner) {
-      gameActiveRef.current = false
-    }
+    if (session && !session.seriesWinner) gameActiveRef.current = true
+    if (session?.seriesWinner)            gameActiveRef.current = false
   }, [session])
 
-  // Intercept browser back/close
   useEffect(() => {
     function onBeforeUnload(e) {
-      if (gameActiveRef.current) {
-        e.preventDefault()
-        e.returnValue = ''
-      }
+      if (gameActiveRef.current) { e.preventDefault(); e.returnValue = '' }
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [])
 
   function handleLeaveAttempt(dest) {
-    if (gameActiveRef.current) {
-      setLeavePrompt(true)
-      setPendingNav(dest)
-    } else {
-      navigate(dest)
-    }
+    if (gameActiveRef.current) { setLeavePrompt(true); setPendingNav(dest) }
+    else navigate(dest)
   }
 
   function confirmLeave() {
@@ -60,14 +46,29 @@ export default function GameRoom() {
     navigate(pendingNav || '/home')
   }
 
-  if (!session) return (
+  async function handleRoundWin(winner) {
+    const current = session?.scores || { X:0, O:0 }
+    const winTarget = session?.winTarget || 3
+    const newScores = { ...current, [winner]: (current[winner] || 0) + 1 }
+    try {
+      await updateScores(code, newScores)
+      if (newScores[winner] >= winTarget) {
+        const s = await loadSession(code)
+        if (s) await saveSession(code, { ...s, scores: newScores, seriesWinner: winner })
+      }
+    } catch (err) {
+      console.error('handleRoundWin failed:', err)
+    }
+  }
+
+  if (loading || !session) return (
     <div className="room room--loading">
       <i className="bx bx-loader-alt bx-spin" style={{fontSize:'2rem',color:'var(--green-muted)'}} />
       <p>Loading game...</p>
     </div>
   )
 
-  const game = getGame(session.gameId)
+  const game    = getGame(session.gameId)
   if (!game) return (
     <div className="room room--loading">
       <p>Unknown game.</p>
@@ -76,35 +77,32 @@ export default function GameRoom() {
   )
 
   const GameComponent = game.component
-  const scores        = session.scores   || { X: 0, O: 0 }
+  const scores        = session.scores  || { X:0, O:0 }
   const winTarget     = session.winTarget || 3
-  const players       = session.players  || { X: { name: 'Player 1', color: '#c0392b' }, O: { name: 'Player 2', color: '#2471a3' } }
-
-  function handleRoundWin(winner) {
-    const newScores = { ...scores, [winner]: (scores[winner] || 0) + 1 }
-    updateScores(code, newScores)
-    if (newScores[winner] >= winTarget) {
-      const s = loadSession(code)
-      saveSession(code, { ...s, scores: newScores, seriesWinner: winner })
-    }
+  const players       = session.players || {
+    X: { name:'Player 1', color:'#c0392b' },
+    O: { name:'Player 2', color:'#2471a3' },
   }
 
   return (
     <div className="room">
-      {/* Leave confirmation overlay */}
       {leavePrompt && (
         <div className="leave-overlay">
           <div className="leave-modal card">
             <i className="bx bx-error-circle" style={{fontSize:'2.2rem',color:'var(--red-ink)'}} />
             <h3 className="leave-modal__title">Wait — game is still on!</h3>
             <p className="leave-modal__text">
-              Leaving now will forfeit this game. Your friend will see you as disconnected.
+              Leaving now will forfeit the game. Your friend will see you as disconnected.
             </p>
             <div className="leave-modal__actions">
               <button className="btn btn-secondary" onClick={() => setLeavePrompt(false)}>
                 <i className="bx bx-arrow-back" /> Stay
               </button>
-              <button className="btn btn-ghost" style={{color:'var(--red-ink)',borderColor:'var(--red-ink)'}} onClick={confirmLeave}>
+              <button
+                className="btn btn-ghost"
+                style={{color:'var(--red-ink)',borderColor:'var(--red-ink)'}}
+                onClick={confirmLeave}
+              >
                 <i className="bx bx-exit" /> Leave anyway
               </button>
             </div>
@@ -112,7 +110,6 @@ export default function GameRoom() {
         </div>
       )}
 
-      {/* Sidebar */}
       <aside className="room__sidebar animate-up">
         <button className="btn btn-ghost room-back" onClick={() => handleLeaveAttempt('/home')}>
           <i className="bx bx-arrow-back" /> Home
@@ -126,7 +123,6 @@ export default function GameRoom() {
           </div>
         </div>
 
-        {/* Series score */}
         <div className="room__score-card">
           <div className="room__score-label">
             <i className="bx bx-trophy" style={{marginRight:5}} />
@@ -144,7 +140,6 @@ export default function GameRoom() {
           )}
         </div>
 
-        {/* Your token */}
         <div className="room__role">
           <div className="role-token" style={{background:players[playerRole].color}}>{playerRole}</div>
           <div>
@@ -166,7 +161,6 @@ export default function GameRoom() {
           <p>{game.description}</p>
         </details>
 
-        {/* Series over: safe leave button */}
         {session.seriesWinner && (
           <button className="btn btn-primary" style={{marginTop:'auto'}} onClick={() => navigate('/home')}>
             <i className="bx bx-home" /> Back to Home
@@ -174,7 +168,6 @@ export default function GameRoom() {
         )}
       </aside>
 
-      {/* Main */}
       <main className="room__main animate-up delay-2">
         <div className="room__game-wrapper">
           <GameComponent

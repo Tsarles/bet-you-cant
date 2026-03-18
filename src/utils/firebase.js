@@ -1,3 +1,7 @@
+// utils/firebase.js
+// Replace the config values with your own from Firebase console
+// OR use .env.local variables (recommended)
+
 import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 
