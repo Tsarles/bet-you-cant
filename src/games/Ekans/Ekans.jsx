@@ -1,4 +1,6 @@
-// Ekans — Chaotic Snake. Every 5th apple reverses controls PERMANENTLY.
+// Ekans — Chaotic Snake
+// Every 5th apple: controls get RANDOMLY remapped (not just flipped)
+// e.g. Up→Right, Down→Left, Left→Up, Right→Down — completely random each time
 
 import { useState, useEffect, useRef } from 'react'
 import './Ekans.css'
@@ -12,20 +14,53 @@ function rndPos(exclude=[]) {
   return p
 }
 
-const DIRS = {
-  ArrowUp:{x:0,y:-1}, ArrowDown:{x:0,y:1}, ArrowLeft:{x:-1,y:0}, ArrowRight:{x:1,y:0},
-  w:{x:0,y:-1}, s:{x:0,y:1}, a:{x:-1,y:0}, d:{x:1,y:0},
+// All 4 directions as vectors
+const D_UP    = { x:0,  y:-1 }
+const D_DOWN  = { x:0,  y:1  }
+const D_LEFT  = { x:-1, y:0  }
+const D_RIGHT = { x:1,  y:0  }
+const ALL_DIRS = [D_UP, D_DOWN, D_LEFT, D_RIGHT]
+
+// Map from key string to direction index (0=up,1=down,2=left,3=right)
+const KEY_TO_IDX = {
+  ArrowUp:0, ArrowDown:1, ArrowLeft:2, ArrowRight:3,
+  w:0, s:1, a:2, d:3,
 }
+const IDX_TO_DIR = [D_UP, D_DOWN, D_LEFT, D_RIGHT]
+
+// Generate a RANDOM remapping of the 4 direction indices
+// Returns array where remap[i] = new direction index for key i
+// Ensures it's never the identity (all same) and never a simple flip
+function makeRandomRemap() {
+  const indices = [0,1,2,3]
+  // Shuffle
+  for (let i=3; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [indices[i], indices[j]] = [indices[j], indices[i]]
+  }
+  // Make sure it's not the identity
+  if (indices.every((v,i)=>v===i)) {
+    // Swap first two
+    [indices[0], indices[1]] = [indices[1], indices[0]]
+  }
+  return indices
+}
+
+const IDENTITY_MAP = [0,1,2,3]
+
+// Direction labels for display
+const DIR_NAMES = ['Up','Down','Left','Right']
+const DIR_ICONS = ['bx-up-arrow-alt','bx-down-arrow-alt','bx-left-arrow-alt','bx-right-arrow-alt']
 
 function makeInitial() {
   const snake = [{x:9,y:9},{x:8,y:9},{x:7,y:9}]
   return {
-    snake, dir:{x:1,y:0}, nextDir:{x:1,y:0},
+    snake, dir:D_RIGHT, nextDirIdx:3,
     apple: rndPos(snake),
     voids: [],
     score:0, applesEaten:0,
-    reversed:false,       // PERMANENT once flipped
-    reversalCount:0,      // how many times reversed
+    dirRemap: IDENTITY_MAP,  // current control mapping
+    remapCount:0,
     forgiveness:2,
     history:[],
     status:'playing',
@@ -33,8 +68,8 @@ function makeInitial() {
 }
 
 export default function Ekans({ gameState, onMove, playerRole, players, onRoundWin }) {
-  const [local, setLocal]   = useState(null)
-  const [phase, setPhase]   = useState('intro')
+  const [local,  setLocal]  = useState(null)
+  const [phase,  setPhase]  = useState('intro')
   const tickRef             = useRef(null)
 
   const myName  = players?.[playerRole]?.name  || `Player ${playerRole}`
@@ -43,12 +78,11 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
   const oppName = players?.[oppRole]?.name || `Player ${oppRole}`
 
   function startGame() {
-    const s = makeInitial()
-    setLocal(s)
+    setLocal(makeInitial())
     setPhase('playing')
   }
 
-  // ── Game tick ──
+  // ── Tick ──────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'playing') { clearInterval(tickRef.current); return }
     tickRef.current = setInterval(() => {
@@ -56,11 +90,11 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
         if (!prev || prev.status !== 'playing') return prev
         const st = {...prev}
 
-        // Apply direction — if reversed, flip it
-        let d = st.reversed
-          ? { x: -st.nextDir.x, y: -st.nextDir.y }
-          : st.nextDir
-        // Prevent 180-turn relative to current dir
+        // Apply remapped direction
+        const remappedIdx = st.dirRemap[st.nextDirIdx]
+        let d = IDX_TO_DIR[remappedIdx]
+
+        // Prevent 180-turn
         if (d.x === -st.dir.x && d.y === -st.dir.y) d = st.dir
         st.dir = d
 
@@ -69,10 +103,9 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
           y:(st.snake[0].y + d.y + GRID) % GRID,
         }
         const newSnake = [head, ...st.snake]
-
         st.history = [...(st.history||[]).slice(-6), st.snake.map(p=>({...p}))]
 
-        // Void tile — teleport
+        // Void tile teleport
         const voidHit = (st.voids||[]).find(v=>v.x===head.x&&v.y===head.y)
         if (voidHit) {
           newSnake[0] = rndPos([...newSnake,...(st.voids||[]).filter(v=>v!==voidHit)])
@@ -84,23 +117,23 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
         if (selfHit) {
           if (st.forgiveness > 0) {
             const prev3 = st.history[st.history.length-3] || st.history[0] || st.snake
-            return {...st, snake:prev3, forgiveness:st.forgiveness-1, nextDir:st.dir}
+            return {...st, snake:prev3, forgiveness:st.forgiveness-1, nextDirIdx:st.nextDirIdx}
           }
           return {...st, snake:st.snake, status:'dead'}
         }
 
         // Apple
         let score=st.score, eaten=st.applesEaten, growing=false
-        let reversed=st.reversed, reversalCount=st.reversalCount
+        let dirRemap=[...st.dirRemap], remapCount=st.remapCount
 
         if (head.x===st.apple.x && head.y===st.apple.y) {
           score++; eaten++; growing=true
           st.apple = rndPos(newSnake)
 
-          // Every 5th apple: PERMANENTLY reverse controls
+          // Every 5th apple: RANDOM remap (permanent until next 5th)
           if (eaten % 5 === 0) {
-            reversed = !reversed  // toggle — so 5th, 10th, 15th flip again
-            reversalCount++
+            dirRemap   = makeRandomRemap()
+            remapCount++
           }
 
           // Every 7th apple: void tile
@@ -111,30 +144,33 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
         }
         if (!growing) newSnake.pop()
 
-        return {...st, snake:newSnake, score, applesEaten:eaten, reversed, reversalCount}
+        return {...st, snake:newSnake, score, applesEaten:eaten, dirRemap, remapCount}
       })
     }, TICK)
     return () => clearInterval(tickRef.current)
   }, [phase])
 
-  // Keyboard
+  // ── Keyboard ──────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'playing') return
     function onKey(e) {
-      const d = DIRS[e.key] || DIRS[e.key.toLowerCase()]
-      if (d) { e.preventDefault(); setLocal(prev=>prev?{...prev,nextDir:d}:prev) }
+      const idx = KEY_TO_IDX[e.key] ?? KEY_TO_IDX[e.key?.toLowerCase()]
+      if (idx !== undefined) {
+        e.preventDefault()
+        setLocal(prev => prev ? {...prev, nextDirIdx: idx} : prev)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [phase])
 
   useEffect(() => {
-    if (local?.status==='dead') { clearInterval(tickRef.current); setPhase('dead') }
+    if (local?.status === 'dead') { clearInterval(tickRef.current); setPhase('dead') }
   }, [local?.status])
 
   function handleSubmit() {
-    const s = local?.score || 0
-    const cur = gameState || {}
+    const s   = local?.score || 0
+    const cur = gameState    || {}
     const newGs = {...cur, [`score${playerRole}`]:s, [`submitted${playerRole}`]:true}
     onMove(newGs)
     if (newGs.submittedX && newGs.submittedO && onRoundWin) {
@@ -143,16 +179,20 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
     setPhase('submitted')
   }
 
-  function tapDir(key) {
-    const d = DIRS[key]
-    if (d) setLocal(prev=>prev?{...prev,nextDir:d}:prev)
+  function tapDir(idx) {
+    setLocal(prev => prev ? {...prev, nextDirIdx:idx} : prev)
   }
 
-  const snakeSet = new Set((local?.snake||[]).map(p=>`${p.x},${p.y}`))
-  const isHead   = local?.snake?.[0]
-  const voidSet  = new Set((local?.voids||[]).map(p=>`${p.x},${p.y}`))
-  const xScore   = gameState?.[`scoreX`] ?? null
-  const oScore   = gameState?.[`scoreO`] ?? null
+  const snakeSet  = new Set((local?.snake||[]).map(p=>`${p.x},${p.y}`))
+  const isHead    = local?.snake?.[0]
+  const voidSet   = new Set((local?.voids||[]).map(p=>`${p.x},${p.y}`))
+  const isRemapped = local && JSON.stringify(local.dirRemap) !== JSON.stringify(IDENTITY_MAP)
+
+  // Build control legend for display
+  const keyLabels = ['↑','↓','←','→']
+  const controlLegend = isRemapped && local
+    ? keyLabels.map((k,i) => `${k}→${DIR_NAMES[local.dirRemap[i]]}`)
+    : null
 
   return (
     <div className="ekans-wrapper">
@@ -168,30 +208,39 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
         <EScoreChip role="O" players={players} score={gameState?.scoreO} submitted={gameState?.submittedO} localScore={local?.score} playerRole={playerRole} phase={phase} />
       </div>
 
-      {/* Reversal status banner — PERMANENT */}
-      {phase==='playing' && local?.reversed && (
+      {/* Control remap badge */}
+      {phase==='playing' && isRemapped && (
         <div className="ekans-badge ekans-badge--chaos">
-          <i className="bx bx-transfer" />
-          Controls PERMANENTLY REVERSED
-          <span className="ekans-badge-count">×{local.reversalCount}</span>
-        </div>
-      )}
-      {phase==='playing' && local?.forgiveness > 0 && (
-        <div className="ekans-badge ekans-badge--life">
-          <i className="bx bx-heart" /> ×{local.forgiveness} forgiveness moves left
+          <i className="bx bx-shuffle" />
+          Controls randomly remapped! #{local.remapCount}
         </div>
       )}
 
-      {/* Intro */}
+      {/* Control legend */}
+      {phase==='playing' && controlLegend && (
+        <div className="ekans-control-legend">
+          {controlLegend.map((c,i) => (
+            <span key={i} className="ekans-control-chip">{c}</span>
+          ))}
+        </div>
+      )}
+
+      {phase==='playing' && local?.forgiveness > 0 && (
+        <div className="ekans-badge ekans-badge--life">
+          <i className="bx bx-heart" /> ×{local.forgiveness} forgiveness left
+        </div>
+      )}
+
+      {/* Intro screen */}
       {phase==='intro' && (
         <div className="ekans-overlay">
           <p className="ekans-overlay-text">Each player plays solo. Higher score wins!</p>
           <div className="ekans-twists">
-            <div className="ekans-twist"><i className="bx bx-transfer" /><span>Every 5th apple <strong>permanently reverses</strong> your controls (toggles each 5th)</span></div>
+            <div className="ekans-twist"><i className="bx bx-shuffle" /><span>Every 5th apple randomly remaps your controls permanently</span></div>
             <div className="ekans-twist"><i className="bx bx-ghost" /><span>Void tiles teleport your snake</span></div>
-            <div className="ekans-twist"><i className="bx bx-undo" /><span>Collide? {local?.forgiveness||2} forgiveness moves rewind you</span></div>
+            <div className="ekans-twist"><i className="bx bx-undo" /><span>2 forgiveness moves — collide and rewind instead of dying</span></div>
           </div>
-          <p className="ekans-controls-hint">Controls: Arrow keys or WASD</p>
+          <p className="ekans-controls-hint">Arrow keys or WASD to move</p>
           <button className="btn btn-primary ekans-start-btn" onClick={startGame}>
             <i className="bx bx-play-circle" /> Start Playing
           </button>
@@ -203,10 +252,10 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
         <div className="ekans-grid" style={{'--grid':GRID}}>
           {Array.from({length:GRID*GRID},(_,i)=>{
             const x=i%GRID, y=Math.floor(i/GRID), key=`${x},${y}`
-            const isSnk = snakeSet.has(key)
-            const isHd  = isHead?.x===x && isHead?.y===y
-            const isApl = local?.apple?.x===x && local?.apple?.y===y
-            const isVd  = voidSet.has(key)
+            const isSnk  = snakeSet.has(key)
+            const isHd   = isHead?.x===x && isHead?.y===y
+            const isApl  = local?.apple?.x===x && local?.apple?.y===y
+            const isVd   = voidSet.has(key)
             return (
               <div key={i} className={[
                 'ekans-cell',
@@ -225,17 +274,13 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
       {/* D-pad */}
       {phase==='playing' && (
         <div className="ekans-dpad">
-          <button className="dpad-btn dpad-up"    onClick={()=>tapDir('ArrowUp')}><i className="bx bx-up-arrow-alt"/></button>
-          <button className="dpad-btn dpad-left"  onClick={()=>tapDir('ArrowLeft')}><i className="bx bx-left-arrow-alt"/></button>
-          <button className="dpad-btn dpad-right" onClick={()=>tapDir('ArrowRight')}><i className="bx bx-right-arrow-alt"/></button>
-          <button className="dpad-btn dpad-down"  onClick={()=>tapDir('ArrowDown')}><i className="bx bx-down-arrow-alt"/></button>
-          {local?.reversed && (
-            <div className="dpad-reversed-hint">⚠ reversed!</div>
-          )}
+          <button className="dpad-btn dpad-up"    onClick={()=>tapDir(0)}><i className="bx bx-up-arrow-alt"/></button>
+          <button className="dpad-btn dpad-left"  onClick={()=>tapDir(2)}><i className="bx bx-left-arrow-alt"/></button>
+          <button className="dpad-btn dpad-right" onClick={()=>tapDir(3)}><i className="bx bx-right-arrow-alt"/></button>
+          <button className="dpad-btn dpad-down"  onClick={()=>tapDir(1)}><i className="bx bx-down-arrow-alt"/></button>
         </div>
       )}
 
-      {/* Death screen */}
       {phase==='dead' && (
         <div className="ekans-dead">
           <p className="ekans-dead-title">Game Over!</p>
@@ -246,15 +291,21 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
         </div>
       )}
 
-      {/* Submitted */}
       {phase==='submitted' && (
         <div className="ekans-submitted">
           <i className="bx bx-check-circle" style={{fontSize:'2rem',color:'var(--green-mid)'}}/>
           <p>Score submitted: <strong>{local?.score}</strong></p>
-          <p className="ekans-waiting"><span className="blink-dot" style={{marginRight:6}} /> Waiting for {oppName} to finish...</p>
-          {xScore!==null && oScore!==null && (
+          <p className="ekans-waiting">
+            <span className="blink-dot" style={{marginRight:6}} />
+            Waiting for {oppName} to finish...
+          </p>
+          {gameState?.scoreX!==null && gameState?.scoreO!==null && (
             <div className="ekans-result">
-              <strong>{(xScore||0)>=(oScore||0)?players?.X?.name||'P1':players?.O?.name||'P2'}</strong> wins the round!
+              <strong>
+                {(gameState?.scoreX||0)>=(gameState?.scoreO||0)
+                  ? players?.X?.name||'P1'
+                  : players?.O?.name||'P2'}
+              </strong> wins the round!
             </div>
           )}
         </div>
@@ -264,9 +315,9 @@ export default function Ekans({ gameState, onMove, playerRole, players, onRoundW
 }
 
 function EScoreChip({role,players,score,submitted,localScore,playerRole,phase}) {
-  const info  = players?.[role]
-  const isMe  = playerRole===role
-  const disp  = submitted ? `Score: ${score}` : isMe&&phase==='playing' ? `Score: ${localScore||0}` : '?'
+  const info = players?.[role]
+  const isMe = playerRole===role
+  const disp = submitted ? `Score: ${score}` : isMe&&phase==='playing' ? `${localScore||0} pts` : '?'
   return (
     <div className={`ekans-score-chip ${isMe?'ekans-score-chip--me':''}`}
       style={isMe?{borderColor:info?.color}:{}}>

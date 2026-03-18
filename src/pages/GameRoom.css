@@ -62,3 +62,49 @@
   color:var(--ink-muted); line-height:1.5;
 }
 .leave-modal__actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+
+/* Side switch notice */
+.room__side-notice {
+  display:flex; align-items:center;
+  padding:8px 12px;
+  background:var(--bg-accent2);
+  border:1.5px solid var(--green-muted);
+  border-radius:var(--radius-md);
+  font-family:var(--font-body); font-size:0.78rem;
+  color:var(--green-dark);
+}
+.room__side-notice strong { color:var(--green-mid); }
+
+/* Suggest button */
+.room__suggest-btn {
+  width:100%; font-size:0.9rem; padding:10px;
+  margin-top:auto;
+}
+
+/* Footer credit */
+.room__footer-credit {
+  font-family:var(--font-body); font-size:0.72rem;
+  color:var(--ink-muted); text-align:center;
+}
+.room__footer-credit a { color:var(--green-mid); text-decoration:none; font-weight:700; }
+.room__footer-credit a:hover { text-decoration:underline; }
+
+/* Side switch indicator */
+.room__side-switch {
+  display:flex; align-items:center; gap:6px;
+  margin-top:8px; padding-top:8px;
+  border-top:1px dashed var(--green-faint);
+  font-family:var(--font-body); font-size:0.72rem; color:var(--green-muted);
+}
+.room__side-switch i { font-size:0.9rem; }
+
+/* Suggest btn */
+.room__suggest-btn { font-size:0.88rem; padding:9px 16px; }
+
+/* Footer credit */
+.room__footer-credit {
+  font-family:var(--font-body); font-size:0.72rem;
+  color:var(--green-muted); text-align:center; margin-top:auto;
+}
+.room__footer-credit a { color:var(--green-mid); text-decoration:none; }
+.room__footer-credit a:hover { text-decoration:underline; }

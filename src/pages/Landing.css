@@ -179,3 +179,56 @@
   .fl-card, .speech-bubble, .scatter-text { display:none; }
   .landing__main-card { padding:32px 22px 24px; transform:none; }
 }
+
+/* Suggest button on landing */
+.landing__suggest-btn {
+  display:flex; align-items:center; gap:7px;
+  padding:9px 20px;
+  background:var(--bg-accent); color:var(--green-dark);
+  border:2px solid var(--green-mid); border-radius:var(--radius-md);
+  box-shadow:3px 3px 0 var(--green-dark);
+  font-family:var(--font-display); font-size:0.95rem; font-weight:700;
+  cursor:pointer; transition:transform 0.1s, box-shadow 0.1s;
+}
+.landing__suggest-btn:hover { transform:translate(-1px,-1px); box-shadow:5px 5px 0 var(--green-dark); }
+.landing__suggest-btn:active { transform:translate(2px,2px); box-shadow:1px 1px 0 var(--green-dark); }
+
+/* Modal overlay */
+.landing-modal-overlay {
+  position:fixed; inset:0; z-index:200;
+  background:rgba(26,26,18,0.6); backdrop-filter:blur(3px);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px; animation:fadeIn 0.2s ease both;
+}
+
+/* Privacy modal inner (used as div now) */
+.privacy-modal__inner {
+  background:var(--bg-card); border:var(--border);
+  border-radius:var(--radius-xl); box-shadow:var(--shadow-lg);
+  padding:28px; max-width:540px; width:100%;
+  max-height:85vh; overflow-y:auto;
+  display:flex; flex-direction:column; gap:16px;
+}
+.privacy-modal__close { align-self:flex-end; font-size:0.88rem; padding:7px 14px; }
+.privacy-modal__title {
+  font-family:var(--font-display); font-weight:700;
+  font-size:1.5rem; color:var(--green-dark);
+  display:flex; align-items:center; gap:9px;
+}
+.privacy-modal__body { display:flex; flex-direction:column; gap:14px; }
+.privacy-modal__body section { display:flex; flex-direction:column; gap:5px; }
+.privacy-modal__body h3 {
+  font-family:var(--font-display); font-weight:700;
+  font-size:0.95rem; color:var(--green-mid);
+  border-bottom:1.5px dashed var(--green-faint); padding-bottom:3px;
+}
+.privacy-modal__body p { font-family:var(--font-body); font-size:0.88rem; color:var(--ink-muted); line-height:1.55; }
+.privacy-modal__body a { color:var(--green-mid); }
+.privacy-modal__body strong { color:var(--green-dark); }
+
+/* Footer link as button */
+.landing__footer-link {
+  background:none; border:none; cursor:pointer;
+  color:var(--green-muted); font-family:var(--font-body); font-size:0.75rem;
+}
+.landing__footer-link:hover { color:var(--green-dark); text-decoration:underline; }

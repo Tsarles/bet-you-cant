@@ -22,38 +22,34 @@ export default function Home() {
 
   // ── Host: create session in Firebase ────────────────────────
   async function handleStart() {
-  if (!selectedGame || starting) return
-  setStarting(true)
-  try {
-    const code = generateCode()
-    const sessionData = {
-      code,
-      gameId: selectedGame.id,
-      gameState: selectedGame.createInitialState(),
-      dare: '',
-      dareType: 'none',
-      winTarget: 3,
-      player2Joined: false,
-      started: false,
-      players: {
-        X: { name: hostPlayer.name.trim() || 'Player 1', color: hostPlayer.color },
-        O: { name: 'Player 2', color: PLAYER_COLORS[1].value },
-      },
-      scores: { X: 0, O: 0 },
+    if (!selectedGame || starting) return
+    setStarting(true)
+    try {
+      const code = generateCode()
+      await saveSession(code, {
+        code,
+        gameId: selectedGame.id,
+        gameState: selectedGame.createInitialState(),
+        dare: '',
+        dareType: 'none',
+        winTarget: 3,
+        player2Joined: false,
+        started: false,
+        players: {
+          X: { name: hostPlayer.name.trim() || 'Player 1', color: hostPlayer.color },
+          O: { name: 'Player 2', color: PLAYER_COLORS[1].value },
+        },
+        scores: { X: 0, O: 0 },
+      })
+      navigate(`/lobby/${code}?role=host`)
+    } catch (err) {
+      console.error('Failed to create session:', err)
+      alert('Could not create game session. Check your internet connection.')
+    } finally {
+      setStarting(false)
     }
-
-    // Navigate instantly — don't wait for Firebase
-    navigate(`/lobby/${code}?role=host`)
-
-    // Write to Firebase in the background
-    saveSession(code, sessionData)
-
-  } catch (err) {
-    console.error('Failed to create session:', err)
-    alert('Could not create game session.')
-    setStarting(false)
   }
-}
+
   // ── Guest: verify code exists then navigate ──────────────────
   async function handleJoin() {
     const code = joinCode.trim().toUpperCase()

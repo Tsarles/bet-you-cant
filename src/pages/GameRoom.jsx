@@ -1,11 +1,15 @@
-// pages/GameRoom.jsx — async Firebase, anti-leave guard
+// pages/GameRoom.jsx
+// Side-switching: winner keeps symbol, loser switches. hostIsX tracks who is X.
+// End game: shows GameOver screen when series is won.
 
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import useGameSession from '../hooks/useGameSession'
 import { getGame } from '../games'
-import DareBet   from '../components/DareBet'
-import GameCode  from '../components/GameCode'
+import DareBet    from '../components/DareBet'
+import GameCode   from '../components/GameCode'
+import GameOver   from '../components/GameOver'
+import SuggestGame from '../components/SuggestGame'
 import { loadSession, saveSession, updateScores } from '../utils/sessionStore'
 import './GameRoom.css'
 
@@ -14,13 +18,19 @@ export default function GameRoom() {
   const [params]         = useSearchParams()
   const navigate         = useNavigate()
   const lobbyRole        = params.get('role') || 'host'
-  const playerRole       = lobbyRole === 'host' ? 'X' : 'O'
 
-  const { session, loading, updateGameState } = useGameSession(code, playerRole)
+  const { session, loading, updateGameState } = useGameSession(code, lobbyRole)
 
-  const gameActiveRef = useRef(false)
-  const [leavePrompt, setLeavePrompt] = useState(false)
-  const [pendingNav,  setPendingNav]  = useState(null)
+  const gameActiveRef  = useRef(false)
+  const [leavePrompt,  setLeavePrompt]  = useState(false)
+  const [pendingNav,   setPendingNav]   = useState(null)
+  const [showSuggest,  setShowSuggest]  = useState(false)
+
+  // hostIsX: true = host plays X this round (defaults true round 1)
+  const hostIsX    = session?.hostIsX !== false
+  const playerRole = lobbyRole === 'host'
+    ? (hostIsX ? 'X' : 'O')
+    : (hostIsX ? 'O' : 'X')
 
   useEffect(() => {
     if (session && !session.seriesWinner) gameActiveRef.current = true
@@ -39,25 +49,56 @@ export default function GameRoom() {
     if (gameActiveRef.current) { setLeavePrompt(true); setPendingNav(dest) }
     else navigate(dest)
   }
-
   function confirmLeave() {
     gameActiveRef.current = false
     setLeavePrompt(false)
     navigate(pendingNav || '/home')
   }
 
-  async function handleRoundWin(winner) {
-    const current = session?.scores || { X:0, O:0 }
-    const winTarget = session?.winTarget || 3
-    const newScores = { ...current, [winner]: (current[winner] || 0) + 1 }
+  // Called by game component when a round ends
+  async function handleRoundWin(winnerSymbol) {
+    if (!session) return
+    const current   = session.scores    || { X:0, O:0 }
+    const winTarget = session.winTarget || 3
+    const newScores = { ...current, [winnerSymbol]: (current[winnerSymbol]||0) + 1 }
+    const isSeriesWon = newScores[winnerSymbol] >= winTarget
+
     try {
-      await updateScores(code, newScores)
-      if (newScores[winner] >= winTarget) {
-        const s = await loadSession(code)
-        if (s) await saveSession(code, { ...s, scores: newScores, seriesWinner: winner })
-      }
+      const s = await loadSession(code)
+      if (!s) return
+
+      // Switch sides: flip hostIsX for next round
+      // Winner keeps their symbol → loser switches → hostIsX flips
+      const newHostIsX = isSeriesWon ? s.hostIsX : !s.hostIsX
+
+      await saveSession(code, {
+        ...s,
+        scores:       newScores,
+        hostIsX:      newHostIsX,
+        seriesWinner: isSeriesWon ? winnerSymbol : null,
+        // Reset game state for next round
+        gameState:    isSeriesWon ? s.gameState : getGame(s.gameId)?.createInitialState(),
+      })
     } catch (err) {
-      console.error('handleRoundWin failed:', err)
+      console.error('handleRoundWin error:', err)
+    }
+  }
+
+  // Play again: reset scores + game state, keep same players
+  async function handlePlayAgain() {
+    try {
+      const s = await loadSession(code)
+      if (!s) return
+      const game = getGame(s.gameId)
+      await saveSession(code, {
+        ...s,
+        scores:       { X:0, O:0 },
+        seriesWinner: null,
+        hostIsX:      true,  // reset to default
+        gameState:    game?.createInitialState(),
+      })
+    } catch (err) {
+      console.error('handlePlayAgain error:', err)
     }
   }
 
@@ -68,7 +109,7 @@ export default function GameRoom() {
     </div>
   )
 
-  const game    = getGame(session.gameId)
+  const game = getGame(session.gameId)
   if (!game) return (
     <div className="room room--loading">
       <p>Unknown game.</p>
@@ -77,15 +118,33 @@ export default function GameRoom() {
   )
 
   const GameComponent = game.component
-  const scores        = session.scores  || { X:0, O:0 }
+  const scores        = session.scores    || { X:0, O:0 }
   const winTarget     = session.winTarget || 3
-  const players       = session.players || {
+  const rawPlayers    = session.players   || {
     X: { name:'Player 1', color:'#c0392b' },
     O: { name:'Player 2', color:'#2471a3' },
   }
 
+  // Map physical players (host/guest) to symbols (X/O) based on current round
+  // displayPlayers[symbol] = { name, color } for whoever is playing that symbol
+  const displayPlayers = {
+    X: hostIsX ? rawPlayers.X : rawPlayers.O,
+    O: hostIsX ? rawPlayers.O : rawPlayers.X,
+  }
+
+  // Series winner info for GameOver screen
+  const seriesWinnerSymbol = session.seriesWinner
+  const seriesWinner = seriesWinnerSymbol
+    ? { ...displayPlayers[seriesWinnerSymbol], symbol: seriesWinnerSymbol, name: displayPlayers[seriesWinnerSymbol].name }
+    : null
+  const seriesLoser = seriesWinnerSymbol
+    ? { ...displayPlayers[seriesWinnerSymbol==='X'?'O':'X'], symbol: seriesWinnerSymbol==='X'?'O':'X', name: displayPlayers[seriesWinnerSymbol==='X'?'O':'X'].name }
+    : null
+
   return (
     <div className="room">
+
+      {/* ── Leave confirmation ── */}
       {leavePrompt && (
         <div className="leave-overlay">
           <div className="leave-modal card">
@@ -98,11 +157,9 @@ export default function GameRoom() {
               <button className="btn btn-secondary" onClick={() => setLeavePrompt(false)}>
                 <i className="bx bx-arrow-back" /> Stay
               </button>
-              <button
-                className="btn btn-ghost"
+              <button className="btn btn-ghost"
                 style={{color:'var(--red-ink)',borderColor:'var(--red-ink)'}}
-                onClick={confirmLeave}
-              >
+                onClick={confirmLeave}>
                 <i className="bx bx-exit" /> Leave anyway
               </button>
             </div>
@@ -110,6 +167,29 @@ export default function GameRoom() {
         </div>
       )}
 
+      {/* ── Suggest modal ── */}
+      {showSuggest && (
+        <div className="leave-overlay" onClick={() => setShowSuggest(false)}>
+          <div onClick={e => e.stopPropagation()}>
+            <SuggestGame onClose={() => setShowSuggest(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* ── Series end screen ── */}
+      {seriesWinner && (
+        <GameOver
+          winner={seriesWinner}
+          loser={seriesLoser}
+          scores={scores}
+          dare={session.dare}
+          dareType={session.dareType}
+          onPlayAgain={handlePlayAgain}
+          onHome={() => navigate('/home')}
+        />
+      )}
+
+      {/* ── Sidebar ── */}
       <aside className="room__sidebar animate-up">
         <button className="btn btn-ghost room-back" onClick={() => handleLeaveAttempt('/home')}>
           <i className="bx bx-arrow-back" /> Home
@@ -123,28 +203,38 @@ export default function GameRoom() {
           </div>
         </div>
 
+        {/* Score tracker */}
         <div className="room__score-card">
           <div className="room__score-label">
             <i className="bx bx-trophy" style={{marginRight:5}} />
             First to {winTarget} wins
           </div>
           <div className="room__score-row">
-            <ScorePip player="X" name={players.X.name} color={players.X.color} score={scores.X} target={winTarget} isMe={playerRole==='X'} />
+            <ScorePip symbol="X" name={displayPlayers.X.name} color={displayPlayers.X.color}
+              score={scores.X} target={winTarget} isMe={playerRole==='X'} />
             <span className="room__score-vs">vs</span>
-            <ScorePip player="O" name={players.O.name} color={players.O.color} score={scores.O} target={winTarget} isMe={playerRole==='O'} />
+            <ScorePip symbol="O" name={displayPlayers.O.name} color={displayPlayers.O.color}
+              score={scores.O} target={winTarget} isMe={playerRole==='O'} />
           </div>
-          {session.seriesWinner && (
-            <div className="room__series-winner" style={{color:players[session.seriesWinner].color}}>
-              <i className="bx bx-party" /> {players[session.seriesWinner].name} wins the series!
-            </div>
-          )}
+          {/* Side switch indicator */}
+          <div className="room__side-switch">
+            <i className="bx bx-transfer" />
+            <span>Sides switch after each round</span>
+          </div>
         </div>
 
+        {/* Your role this round */}
         <div className="room__role">
-          <div className="role-token" style={{background:players[playerRole].color}}>{playerRole}</div>
+          <div className="role-token" style={{background: displayPlayers[playerRole].color}}>
+            {playerRole}
+          </div>
           <div>
-            <div className="role-label">{players[playerRole].name} — you are {playerRole}</div>
-            <div className="role-sub">{lobbyRole==='host' ? 'Host · Goes first' : 'Guest · Second'}</div>
+            <div className="role-label">
+              {displayPlayers[playerRole].name} — playing as {playerRole}
+            </div>
+            <div className="role-sub">
+              {lobbyRole==='host' ? 'Host' : 'Guest'} · {playerRole==='X' ? 'Goes first' : 'Goes second'}
+            </div>
           </div>
         </div>
 
@@ -161,20 +251,24 @@ export default function GameRoom() {
           <p>{game.description}</p>
         </details>
 
-        {session.seriesWinner && (
-          <button className="btn btn-primary" style={{marginTop:'auto'}} onClick={() => navigate('/home')}>
-            <i className="bx bx-home" /> Back to Home
-          </button>
-        )}
+        <button className="btn btn-secondary room__suggest-btn" onClick={() => setShowSuggest(true)}>
+          <i className="bx bx-bulb" /> Suggest a Game
+        </button>
+
+        <p className="room__footer-credit">
+          © 2026 Bet You Can't ·{' '}
+          <a href="https://github.com/Tsarles" target="_blank" rel="noopener noreferrer">@Tsarles</a>
+        </p>
       </aside>
 
+      {/* ── Main game area ── */}
       <main className="room__main animate-up delay-2">
         <div className="room__game-wrapper">
           <GameComponent
             gameState={session.gameState}
             onMove={updateGameState}
             playerRole={playerRole}
-            players={players}
+            players={displayPlayers}
             onRoundWin={handleRoundWin}
           />
         </div>
@@ -183,11 +277,11 @@ export default function GameRoom() {
   )
 }
 
-function ScorePip({ player, name, color, score, target, isMe }) {
+function ScorePip({ symbol, name, color, score, target, isMe }) {
   const pips = Array.from({ length: target }, (_, i) => i < score)
   return (
     <div className="score-pip-group">
-      <div className="score-pip-token" style={{background:color}}>{player}</div>
+      <div className="score-pip-token" style={{background:color}}>{symbol}</div>
       <div className="score-pip-name">{isMe ? 'You' : name}</div>
       <div className="score-pip-dots">
         {pips.map((filled, i) => (
