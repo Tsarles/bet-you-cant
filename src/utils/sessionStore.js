@@ -1,6 +1,9 @@
-// utils/sessionStore.js — localStorage session helpers
+import { db } from './firebase'
+import {
+  doc, setDoc, getDoc, updateDoc, onSnapshot
+} from 'firebase/firestore'
 
-const PREFIX = 'byc_'
+const COL = 'sessions'
 
 export function generateCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -8,57 +11,50 @@ export function generateCode() {
   return `${pick()}${pick()}${pick()}-${pick()}${pick()}${pick()}`
 }
 
-export function saveSession(code, data) {
-  try { localStorage.setItem(PREFIX + code, JSON.stringify({ ...data, _ts: Date.now() })) }
-  catch {}
+export async function saveSession(code, data) {
+  await setDoc(doc(db, COL, code), { ...data, _ts: Date.now() })
 }
 
-export function loadSession(code) {
-  try { const r = localStorage.getItem(PREFIX + code); return r ? JSON.parse(r) : null }
-  catch { return null }
+export async function loadSession(code) {
+  const snap = await getDoc(doc(db, COL, code))
+  return snap.exists() ? snap.data() : null
 }
 
-export function deleteSession(code) {
-  try { localStorage.removeItem(PREFIX + code) } catch {}
+export function watchSession(code, callback) {
+  return onSnapshot(doc(db, COL, code), snap => {
+    if (snap.exists()) callback(snap.data())
+  })
 }
 
-/** Guest joins — marks player2Joined and saves their player info */
-export function joinSession(code, guestInfo) {
-  const s = loadSession(code)
+export async function joinSession(code, guestInfo) {
+  const s = await loadSession(code)
   if (!s) return null
   const updated = {
     ...s,
     player2Joined: true,
-    players: { ...s.players, O: guestInfo },
+    players: { ...s.players, O: guestInfo }
   }
-  saveSession(code, updated)
+  await saveSession(code, updated)
   return updated
 }
 
-/** Update only the gameState (for move sync) */
-export function updateGameState(code, gameState) {
-  const s = loadSession(code)
-  if (!s) return
-  saveSession(code, { ...s, gameState })
+export async function updateGameState(code, gameState) {
+  await updateDoc(doc(db, COL, code), { gameState, _ts: Date.now() })
 }
 
-/** Update scores after a round ends */
-export function updateScores(code, scores) {
-  const s = loadSession(code)
-  if (!s) return
-  saveSession(code, { ...s, scores })
+export async function updateScores(code, scores) {
+  await updateDoc(doc(db, COL, code), { scores, _ts: Date.now() })
 }
 
-/** Default player colors */
 export const PLAYER_COLORS = [
-  { label: 'Cherry',    value: '#c0392b' },
-  { label: 'Ocean',     value: '#2471a3' },
-  { label: 'Forest',    value: '#1a6b35' },
-  { label: 'Grape',     value: '#7d3c98' },
-  { label: 'Flame',     value: '#d35400' },
-  { label: 'Teal',      value: '#0e6b6b' },
-  { label: 'Crimson',   value: '#a93226' },
-  { label: 'Midnight',  value: '#2c3e50' },
+  { label: 'Cherry',   value: '#c0392b' },
+  { label: 'Ocean',    value: '#2471a3' },
+  { label: 'Forest',   value: '#1a6b35' },
+  { label: 'Grape',    value: '#7d3c98' },
+  { label: 'Flame',    value: '#d35400' },
+  { label: 'Teal',     value: '#0e6b6b' },
+  { label: 'Crimson',  value: '#a93226' },
+  { label: 'Midnight', value: '#2c3e50' },
 ]
 
 export const DARE_TYPES = [

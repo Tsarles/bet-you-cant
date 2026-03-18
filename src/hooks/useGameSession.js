@@ -1,35 +1,26 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { loadSession, saveSession, updateGameState as persistGameState } from '../utils/sessionStore'
+import { useState, useEffect, useCallback } from 'react'
+import { watchSession, updateGameState as persistState, saveSession, loadSession } from '../utils/sessionStore'
 
 export default function useGameSession(code, playerRole) {
-  const [session, setSession] = useState(() => loadSession(code))
-  const lastTs = useRef(session?._ts ?? 0)
+  const [session, setSession] = useState(null)
 
+  // Real-time listener — fires instantly when any player makes a move
   useEffect(() => {
     if (!code) return
-    const interval = setInterval(() => {
-      const fresh = loadSession(code)
-      if (fresh && fresh._ts !== lastTs.current) {
-        lastTs.current = fresh._ts
-        setSession(fresh)
-      }
-    }, 400)
-    return () => clearInterval(interval)
+    const unsub = watchSession(code, (data) => {
+      setSession(data)
+    })
+    return () => unsub()
   }, [code])
 
-  const updateGameState = useCallback((newGameState) => {
-    persistGameState(code, newGameState)
-    const fresh = loadSession(code)
-    if (fresh) { lastTs.current = fresh._ts; setSession(fresh) }
+  const updateGameState = useCallback(async (newGameState) => {
+    await persistState(code, newGameState)
   }, [code])
 
-  const markJoined = useCallback(() => {
-    const current = loadSession(code)
+  const markJoined = useCallback(async () => {
+    const current = await loadSession(code)
     if (!current) return
-    const updated = { ...current, player2Joined: true }
-    saveSession(code, updated)
-    lastTs.current = updated._ts
-    setSession(updated)
+    await saveSession(code, { ...current, player2Joined: true })
   }, [code])
 
   return { session, updateGameState, markJoined }
