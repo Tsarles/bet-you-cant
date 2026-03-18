@@ -1,0 +1,181 @@
+/* Landing.css */
+.landing {
+  position:relative; width:100vw; height:100vh;
+  overflow:hidden; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--bg);
+}
+
+/* ── Main hero card ── */
+.landing__main-card {
+  position:relative; z-index:10;
+  background:var(--bg-inner);
+  border:3px solid var(--ink);
+  border-radius:42px;
+  box-shadow:14px 14px 0 var(--ink);
+  padding:44px 64px 32px;
+  text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:14px;
+  transform:rotate(-1deg);
+  animation:fadeUp 0.6s ease both;
+  max-width:480px; width:88vw;
+  cursor:default;
+}
+.landing__title {
+  font-family:var(--font-display); font-weight:700;
+  font-size:clamp(2.4rem,6.5vw,4rem); line-height:1.05;
+  color:var(--green-mid); letter-spacing:-0.01em;
+}
+.landing__subtitle {
+  font-family:var(--font-body); font-size:0.95rem;
+  color:var(--ink-muted); letter-spacing:0.22em; text-transform:uppercase;
+}
+.landing__cta {
+  margin-top:6px; padding:13px 38px;
+  background:var(--ink); color:var(--bg-inner);
+  border:3px solid var(--ink); border-radius:var(--radius-md);
+  box-shadow:5px 5px 0 var(--green-dark);
+  font-family:var(--font-display); font-size:1.25rem; font-weight:700;
+  cursor:pointer; display:flex; align-items:center; gap:9px;
+  transition:transform 0.12s, box-shadow 0.12s;
+}
+.landing__cta:hover  { transform:translate(-2px,-2px); box-shadow:8px 8px 0 var(--green-dark); }
+.landing__cta:active { transform:translate(3px,3px); box-shadow:2px 2px 0 var(--green-dark); }
+.landing__cta i { font-size:1.4rem; }
+.landing__tap-hint {
+  font-family:var(--font-body); font-size:0.78rem;
+  color:var(--ink-muted); font-style:italic;
+}
+
+/* Responsible gaming note */
+.landing__note {
+  display:flex; align-items:flex-start; gap:7px;
+  padding:10px 14px;
+  background:var(--bg-accent2);
+  border:1.5px solid var(--green-muted);
+  border-radius:var(--radius-md);
+  box-shadow:2px 2px 0 var(--green-dark);
+  font-family:var(--font-body); font-size:0.82rem;
+  color:var(--green-dark); line-height:1.4;
+  text-align:left; max-width:320px;
+}
+.landing__note i { color:var(--green-mid); font-size:1rem; flex-shrink:0; margin-top:1px; }
+
+/* ── Footer ── */
+.landing__footer {
+  position:absolute; bottom:14px; left:0; right:0;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  font-family:var(--font-body); font-size:0.75rem; color:var(--ink-muted);
+  z-index:20; pointer-events:auto;
+}
+.landing__footer a { color:var(--green-mid); text-decoration:none; font-weight:700; }
+.landing__footer a:hover { text-decoration:underline; }
+.landing__footer-sep { opacity:0.5; }
+.landing__footer-link { cursor:pointer; color:var(--green-muted); }
+.landing__footer-link:hover { color:var(--green-dark); }
+
+/* ── Floating doodle cards ── */
+.fl-card {
+  position:absolute;
+  background:var(--bg-card);
+  border:2.5px solid var(--ink);
+  border-radius:18px;
+  box-shadow:7px 7px 0 var(--ink);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:6px; padding:10px 12px;
+  pointer-events:none;
+  transition:transform 0.3s ease, box-shadow 0.3s ease;
+  cursor:default;
+  user-select:none;
+}
+/* Hover lift — pointer-events none so mouse-over goes to the underlying landing div */
+/* We use JS-free CSS sibling trick: wrap in a div that captures hover */
+.fl-card:hover {
+  transform:translateY(-10px) scale(1.06) rotate(0deg) !important;
+  box-shadow:12px 12px 0 var(--ink) !important;
+  pointer-events:auto;
+  z-index:15;
+}
+
+.fl-card__icon { font-size:1.8rem; color:var(--green-mid); }
+.fl-card__label {
+  font-family:var(--font-body); font-size:0.72rem;
+  color:var(--ink-muted); text-align:center; line-height:1.2; white-space:nowrap;
+}
+
+/* Sizes */
+.fc-small { padding:8px 10px; border-radius:14px; }
+.fc-small .fl-card__icon { font-size:1.4rem; }
+.fc-tiny  { padding:6px 8px; border-radius:10px; box-shadow:5px 5px 0 var(--ink); }
+.fc-tiny .fl-card__icon { font-size:1.1rem; }
+
+/* Positions + float animations */
+.fc-1 { width:110px; top:9%;  left:20%; animation:float1 5s ease-in-out infinite; }
+.fc-2 { width:105px; top:13%; right:14%; animation:float3 6s ease-in-out infinite; }
+.fc-3 { width:100px; bottom:18%; left:8%;  animation:float2 5.5s ease-in-out infinite 0.4s; }
+.fc-4 { width:115px; bottom:14%; right:7%; animation:float1 4.8s ease-in-out infinite 0.8s; }
+.fc-5 { width:72px;  top:7%;   right:30%; animation:float4 4s ease-in-out infinite; }
+.fc-6 { width:68px;  top:10%;  left:6%;   animation:float2 4.5s ease-in-out infinite 0.3s; }
+.fc-7 { width:52px;  bottom:8%;left:28%;  animation:float3 5s ease-in-out infinite 1s; }
+.fc-8 { width:50px;  bottom:7%;right:24%; animation:float2 4.2s ease-in-out infinite 0.6s; }
+
+/* ── Speech bubbles ── */
+.speech-bubble {
+  position:absolute;
+  background:var(--bg-inner); border:2.5px solid var(--ink);
+  border-radius:18px; padding:9px 16px;
+  font-family:var(--font-display); font-weight:700;
+  font-size:0.88rem; color:var(--green-mid);
+  box-shadow:4px 4px 0 var(--ink); z-index:5; pointer-events:none;
+}
+.speech-bubble::after {
+  content:''; position:absolute; border:9px solid transparent;
+}
+.speech-bubble--left  { top:21%; left:4%; transform:rotate(-4deg); animation:float3 5s ease-in-out infinite; }
+.speech-bubble--left::after  { bottom:-18px; left:16px; border-top-color:var(--ink); }
+.speech-bubble--right { top:16%; right:3%; transform:rotate(5deg); animation:float1 4.5s ease-in-out infinite; padding:8px 12px; }
+.speech-bubble--right::after { bottom:-18px; right:14px; border-top-color:var(--ink); }
+
+/* ── Scattered text ── */
+.scatter-text {
+  position:absolute; font-family:var(--font-display); font-weight:700;
+  font-size:1.05rem; color:var(--ink-muted);
+  z-index:5; pointer-events:none; animation:float2 6s ease-in-out infinite;
+}
+.scatter-text--bl { bottom:11%; left:4%;  transform:rotate(3deg); }
+.scatter-text--tr { top:5%;    right:4%; transform:rotate(-5deg); font-size:0.85rem; }
+
+/* ── Privacy modal ── */
+.privacy-modal {
+  border:var(--border); border-radius:var(--radius-xl);
+  box-shadow:var(--shadow-lg); padding:0;
+  background:var(--bg-card); max-width:560px; width:92vw;
+  max-height:85vh; overflow-y:auto;
+}
+.privacy-modal::backdrop { background:rgba(26,26,18,0.55); backdrop-filter:blur(2px); }
+.privacy-modal__inner { padding:28px; display:flex; flex-direction:column; gap:18px; }
+.privacy-modal__close { align-self:flex-end; font-size:0.88rem; padding:7px 14px; }
+.privacy-modal__title {
+  font-family:var(--font-display); font-weight:700;
+  font-size:1.6rem; color:var(--green-dark);
+  display:flex; align-items:center; gap:9px;
+}
+.privacy-modal__body { display:flex; flex-direction:column; gap:16px; }
+.privacy-modal__body section { display:flex; flex-direction:column; gap:6px; }
+.privacy-modal__body h3 {
+  font-family:var(--font-display); font-weight:700;
+  font-size:1rem; color:var(--green-mid);
+  border-bottom:1.5px dashed var(--green-faint); padding-bottom:4px;
+}
+.privacy-modal__body p {
+  font-family:var(--font-body); font-size:0.9rem;
+  color:var(--ink-muted); line-height:1.55;
+}
+.privacy-modal__body a { color:var(--green-mid); }
+.privacy-modal__body strong { color:var(--green-dark); }
+
+@media(max-width:600px) {
+  .fl-card, .speech-bubble, .scatter-text { display:none; }
+  .landing__main-card { padding:32px 22px 24px; transform:none; }
+}

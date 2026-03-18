@@ -1,0 +1,26 @@
+.dare-bet {
+  background:var(--bg-inner); border:var(--border);
+  border-radius:var(--radius-md); box-shadow:var(--shadow-sm); padding:14px 16px;
+  position:relative; overflow:hidden;
+}
+.dare-bet::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:4px;
+  border-radius:var(--radius-md) var(--radius-md) 0 0;
+}
+.dare-bet--dare::before { background:repeating-linear-gradient(90deg,var(--red-ink) 0 10px,var(--bg-card) 10px 16px); }
+.dare-bet--bet::before  { background:repeating-linear-gradient(90deg,var(--green-mid) 0 10px,var(--bg-card) 10px 16px); }
+.dare-bet--truth::before{ background:repeating-linear-gradient(90deg,#7d3c98 0 10px,var(--bg-card) 10px 16px); }
+
+.dare-bet__header { display:flex; align-items:center; gap:6px; margin-bottom:7px; padding-top:3px; }
+.dare-bet__icon  { font-size:1.1rem; color:var(--green-mid); }
+.dare-bet--dare .dare-bet__icon { color:var(--red-ink); }
+.dare-bet--truth .dare-bet__icon{ color:#7d3c98; }
+.dare-bet__title {
+  font-family:var(--font-display); font-size:0.7rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:0.14em; color:var(--green-muted);
+}
+.dare-bet__text {
+  font-family:var(--font-display); font-size:1rem; font-style:italic;
+  color:var(--green-dark); line-height:1.5; margin:0;
+  border-left:3px solid var(--green-light); padding-left:10px;
+}
